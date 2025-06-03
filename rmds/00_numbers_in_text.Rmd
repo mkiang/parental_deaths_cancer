@@ -1,0 +1,252 @@
+---
+title: "Numbers used in text of the manuscript"
+author: "Mathew Kiang"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    code_folding: 'hide'
+    toc: true
+    toc_float: true
+---
+
+```{r options, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(error = FALSE)
+```
+
+## Set up
+
+```{r settings, results='hide'}
+library(tidyverse)
+library(here)
+library(knitr)
+library(kableExtra)
+source(here("code", "utils.R"))
+```
+
+```{r data}
+results_df <- readRDS(here("data", "summarized_results.RDS")) |> 
+    categorize_race() |> 
+    categorize_deaths()
+results_age_df <- readRDS(here("data", "summarized_results_by_age.RDS")) |> 
+    categorize_race() |> 
+    categorize_deaths()
+demographics <- readRDS(here("data", "death_demographics.RDS"))
+```
+
+## Demographics of deaths
+```{r demographics}
+TOTAL_DEATHS <- sum(demographics$n_cancer)
+MEAN_AGE <- weighted.mean(demographics$age_years, demographics$n_cancer, na.rm = TRUE)
+SD_AGE <- sd(rep(demographics$age_years, times = demographics$n_cancer), na.rm = TRUE)
+MEDIAN_AGE <- median(rep(demographics$age_years, times = demographics$n_cancer), na.rm = TRUE)
+IQRL_AGE <- quantile(rep(demographics$age_years, times = demographics$n_cancer), probs = .25, na.rm = TRUE)
+IQRU_AGE <- quantile(rep(demographics$age_years, times = demographics$n_cancer), probs = .75, na.rm = TRUE)
+
+by_sex <- demographics |> group_by(sex) |> summarize(n = sum(n_cancer), .groups = "drop") |> mutate(prop = n / sum(n))
+
+by_raceeth <- demographics |> group_by(race_eth) |> summarize(n = sum(n_cancer), .groups = "drop") |> mutate(prop = n / sum(n))
+
+by_sex
+by_raceeth
+```
+Between 1999 and 2020, there were `r prettyNum(TOTAL_DEATHS, big.mark = ",")` deaths due to cancer with a mean (SD) age of `r round(MEAN_AGE, 1)` (`r round(SD_AGE, 1)`) years. Most deaths occurred among males (52.3%; n = 6,608,436) and White decedents (80.1%; n = 10,124,360) followed by Black (11.4%; n = 1,439,259) and Hispanic (5.7%; n = 717,080) decedents. 
+
+Between 1999 and 2020, there were `r prettyNum(TOTAL_DEATHS, big.mark = ",")` deaths due to cancer with a median (IQR) age of `r round(MEDIAN_AGE)` (`r IQRL_AGE` to `r IQRU_AGE`) years. Most deaths occurred among males (52.3%; n = 6,608,436) and White decedents (80.1%; n = 10,124,360) followed by Black (11.4%; n = 1,439,259) and Hispanic (5.7%; n = 717,080) decedents. 
+
+## Age of youth during time of parental cancer death
+
+```{r}
+sub_age <- results_age_df |>
+    filter(race == "total", cause == "cancer", metric == "number", age < 18)
+
+sub_age |>
+    uncount(as.integer(median)) |> 
+    pull(age) |>
+    quantile(probs = c(.25, .5, .75))
+
+```
+
+```{r}
+sub_age |>
+    group_by(age) |>
+    summarize(median = sum(median)) |>
+    mutate(
+        cume_n = cumsum(median),
+        prop = median / sum(median),
+        cume_prop = cumsum(prop)
+    ) |> 
+    kable(row.names = FALSE, 
+          digits = c(0, 0, 0, 3, 3),
+        format = "html",
+        booktabs = TRUE
+    ) |>
+    kableExtra::kable_styling(bootstrap = c("striped", "scale_down"))
+```
+
+
+## Total number of youth who lost one or more parents due to cancer, 1999 through 2020
+```{r}
+tot_youth <- results_df |>
+    filter(race == "total", cause == "cancer", metric == "number", sex == "both") |>
+    mutate(
+        cume_median = cumsum(median),
+        cume_lower95 = cumsum(lower95),
+        cume_upper95 = cumsum(upper95)
+    ) |>
+    filter(year == max(year)) |>
+    mutate(parental_deaths = sprintf(
+        "%s (%s to %s)",
+        prettyNum(round(cume_median / 1000) * 1000, big.mark = ","),
+        prettyNum(round(cume_lower95 / 1000) * 1000, big.mark = ","),
+        prettyNum(round(cume_upper95 / 1000) * 1000, big.mark = ",")
+    ))
+
+tot_youth |> select(race_cat, death_cat, parental_deaths)
+```
+
+## Total number of youth who lost at least one parent from any cause, 1999 through 2020
+```{r}
+tot_youth_all_causes <- results_df |>
+    filter(race == "total", cause == "all", metric == "number", sex == "both") |>
+    mutate(
+        cume_median = cumsum(median),
+        cume_lower95 = cumsum(lower95),
+        cume_upper95 = cumsum(upper95)
+    ) |>
+    filter(year == max(year)) |>
+    mutate(parental_deaths = sprintf(
+        "%s (%s to %s)",
+        prettyNum(round(cume_median / 1000) * 1000, big.mark = ","),
+        prettyNum(round(cume_lower95 / 1000) * 1000, big.mark = ","),
+        prettyNum(round(cume_upper95 / 1000) * 1000, big.mark = ",")
+    ))
+
+tot_youth_all_causes |> select(race_cat, death_cat, parental_deaths)
+```
+
+```{r}
+tot_youth$cume_median / tot_youth_all_causes$cume_median
+```
+
+## Number of parental deaths by year 
+
+```{r}
+parental_deaths_by_year <- results_df |>
+    filter(race == "total", cause == "cancer", metric == "number", sex == "both") |>
+    mutate(parental_deaths = sprintf(
+        "%s (%s to %s)",
+        prettyNum(round(median / 100) * 100, big.mark = ","),
+        prettyNum(round(lower95 / 100) * 100, big.mark = ","),
+        prettyNum(round(upper95 / 100) * 100, big.mark = ",")
+    ))
+
+parental_deaths_by_year |>
+    select(race_cat, death_cat, year, parental_deaths) |>
+    kable(row.names = FALSE,
+          format = "html",
+          booktabs = TRUE) |>
+    kableExtra::kable_styling(bootstrap = c("striped", "scale_down"))
+```
+
+## Incidence of parental deaths by year
+
+```{r}
+incidence_by_year <- results_df |>
+    filter(race == "total",
+           cause == "cancer",
+           metric == "percent",
+           sex == "both") |>
+    mutate(parental_deaths = sprintf(
+        "%0.2f (%0.2f to %0.2f)",
+        round(median  * 1000, 2),
+        round(lower95 * 1000, 2),
+        round(upper95 * 1000, 2)
+    ))
+
+incidence_by_year |>
+    select(race_cat, death_cat, year, parental_deaths) |>
+    kable(row.names = FALSE,
+          format = "html",
+          booktabs = TRUE) |>
+    kableExtra::kable_styling(bootstrap = c("striped", "scale_down"))
+```
+
+## Number of parental deaths by year by parent
+
+```{r}
+parental_deaths_parent_by_year <- results_df |>
+    filter(race == "total", cause == "cancer", metric == "number", sex != "both") |>
+    mutate(parental_deaths = sprintf(
+        "%s (%s to %s)",
+        prettyNum(round(median / 100) * 100, big.mark = ","),
+        prettyNum(round(lower95 / 100) * 100, big.mark = ","),
+        prettyNum(round(upper95 / 100) * 100, big.mark = ",")
+    ))
+
+parental_deaths_parent_by_year |>
+    select(race_cat, death_cat, sex, year, parental_deaths) |>
+    arrange(year, sex) |> 
+    kable(row.names = FALSE,
+          format = "html",
+          booktabs = TRUE) |>
+    kableExtra::kable_styling(bootstrap = c("striped", "scale_down"))
+```
+
+## Incidence of parental daths in 2020 by race/ethnicity
+
+```{r}
+parental_deaths_parent_by_race <- results_df |>
+    filter(year == 2020, cause == "cancer", metric == "percent", sex == "both") |>
+    mutate(parental_deaths = sprintf(
+        "%0.3f (%0.3f to %0.3f)",
+        round(median  * 100, 3),
+        round(lower95 * 100, 3),
+        round(upper95 * 100, 3)
+    ))
+
+parental_deaths_parent_by_race |>
+    select(race_cat, death_cat, sex, year, parental_deaths) |>
+    arrange(year, sex) |>
+    kable(row.names = FALSE,
+          format = "html",
+          booktabs = TRUE) |>
+    kableExtra::kable_styling(bootstrap = c("striped", "scale_down"))
+```
+
+## Change from 1999 to 2020 
+
+```{r}
+change_df <- results_df |>
+    filter(year %in% c(1999, 2020), cause == "cancer", metric == "percent") |>
+    group_by(race, sex) |>
+    mutate(
+        rel_median = 100 * (median - lag(median)) / lag(median),
+        rel_upper = 100 * (lower95 - lag(lower95)) / lag(lower95),
+        rel_lower = 100 * (upper95 - lag(upper95)) / lag(upper95)
+    ) |>
+    filter(!is.na(rel_median)) |>
+    mutate(sex_cat = factor(
+        sex,
+        levels = c("both", "father", "mother"),
+        labels = c("Both parents", "Father", "Mother"),
+        ordered = TRUE
+    )) |>
+    mutate(parental_deaths = sprintf(
+        "%i%% (%i%% to %i%%)",
+        round(rel_median, 0),
+        round(rel_lower, 0),
+        round(rel_upper, 0)
+    ))
+
+change_df |>
+    select(race_cat, death_cat, sex_cat, parental_deaths) |>
+    arrange(race_cat, sex_cat) |>
+    kable(row.names = FALSE,
+          format = "html",
+          booktabs = TRUE) |>
+    kableExtra::kable_styling(bootstrap = c("striped", "scale_down"))
+```
+
