@@ -38,5 +38,3 @@ We use publicly available data and provide code that will download and/or munge 
 For full reproducibility, we also provide all of our simulation files as well as our original and processed data, which will allow for exact reproduction of our results. Due to file size limitations on Github, the files are stored on [the Stanford Digital Repository](https://purl.stanford.edu/xf360tg2895). 
 
 To use these files, download each folder noting that the `simulations` folder (~117GB) should be a subfolder of `./output` while the `data_processed` (~1.2GB) and `data_raw` (~3GB) folders should be in the project root (`./`). 
-
-We use [`renv`](https://rstudio.github.io/renv/index.html) for package management but below we also post the relevant session information to ensure full reproducibility. 

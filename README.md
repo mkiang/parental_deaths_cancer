@@ -51,7 +51,3 @@ To use these files, download each folder noting that the `simulations`
 folder (~117GB) should be a subfolder of `./output` while the
 `data_processed` (~1.2GB) and `data_raw` (~3GB) folders should be in the
 project root (`./`).
-
-We use [`renv`](https://rstudio.github.io/renv/index.html) for package
-management but below we also post the relevant session information to
-ensure full reproducibility.
